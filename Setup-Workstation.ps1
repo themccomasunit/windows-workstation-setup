@@ -2,11 +2,11 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Main orchestration script for Windows workstation setup.
+    Main script for Windows workstation setup.
 
 .DESCRIPTION
-    Prompts for user configuration, compiles DSC, applies configuration,
-    and runs post-installation tasks.
+    Installs and configures development tools using plain PowerShell.
+    No DSC dependency - runs entirely as the current user.
 
 .NOTES
     Author: themccomasunit
@@ -54,9 +54,6 @@ Write-Host @"
 
 "@ -ForegroundColor Cyan
 
-# Get script directory
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-
 # ============================================================
 # CONFIGURATION - Edit these values for your environment
 # ============================================================
@@ -70,7 +67,9 @@ Write-Host "  Email: $GitUserEmail"
 Write-Host ""
 Write-Host "Proceeding with installation..." -ForegroundColor Green
 
-# Ensure winget is installed (must run as current user, not via DSC/SYSTEM)
+# ============================================================
+# STEP 1: Ensure winget is installed
+# ============================================================
 Write-Status "Checking for winget..."
 $winget = Get-Command winget -ErrorAction SilentlyContinue
 if (-not $winget) {
@@ -117,7 +116,7 @@ if (-not $winget) {
         Write-Warning "Failed to download Winget: $_"
     }
 
-    # Install packages (as current user)
+    # Install packages
     Write-Host "  Installing VCLibs..." -ForegroundColor Gray
     if (Test-Path $vclibsPath) {
         Add-AppxPackage -Path $vclibsPath -ErrorAction SilentlyContinue
@@ -137,7 +136,7 @@ if (-not $winget) {
     Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
     # Refresh PATH
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    Refresh-EnvironmentPath
     $wingetPathDir = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
     if ($env:Path -notlike "*$wingetPathDir*") {
         $env:Path = "$env:Path;$wingetPathDir"
@@ -148,80 +147,159 @@ if (-not $winget) {
     if ($winget) {
         Write-Success "Winget installed successfully."
     } else {
-        Write-Warning "Winget installation may have failed. Will attempt to continue..."
+        Write-Error "Winget installation failed. Cannot continue."
+        exit 1
     }
 } else {
     Write-Success "Winget is already installed."
 }
 
-# Ensure WinRM is configured (required for DSC)
-Write-Status "Configuring WinRM for DSC..."
-try {
-    # Enable WinRM service
-    $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
-    if ($winrmService.Status -ne 'Running') {
-        Set-Service -Name WinRM -StartupType Automatic
-        Start-Service -Name WinRM
+# ============================================================
+# STEP 2: Install Git for Windows
+# ============================================================
+Write-Status "Checking for Git..."
+$git = Get-Command git -ErrorAction SilentlyContinue
+if (-not $git) {
+    Write-Status "Installing Git for Windows..."
+    winget install --id Git.Git --accept-source-agreements --accept-package-agreements --silent
+    Refresh-EnvironmentPath
+
+    # Also add Git to path manually if needed
+    $gitPath = "C:\Program Files\Git\cmd"
+    if ((Test-Path $gitPath) -and ($env:Path -notlike "*$gitPath*")) {
+        $env:Path = "$env:Path;$gitPath"
     }
 
-    # Quick configure WinRM for local use
-    winrm quickconfig -quiet 2>$null
-
-    # Ensure LocalAccountTokenFilterPolicy is set for local admin
-    $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
-    $regName = "LocalAccountTokenFilterPolicy"
-    $currentValue = Get-ItemProperty -Path $regPath -Name $regName -ErrorAction SilentlyContinue
-    if ($currentValue.$regName -ne 1) {
-        Set-ItemProperty -Path $regPath -Name $regName -Value 1 -Type DWord -Force
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if ($git) {
+        Write-Success "Git installed successfully."
+    } else {
+        Write-Warning "Git installation may require a terminal restart."
     }
-
-    Write-Success "WinRM configured successfully."
-} catch {
-    Write-Warning "Could not fully configure WinRM: $_"
-    Write-Host "Attempting to continue anyway..." -ForegroundColor Yellow
+} else {
+    Write-Success "Git is already installed."
 }
 
-# Run DSC Configuration
-Write-Status "Compiling DSC configuration..."
-
-$configScript = Join-Path $ScriptDir "configurations\WorkstationConfig.ps1"
-$mofOutputPath = Join-Path $env:TEMP "WorkstationDSC"
-
-if (-not (Test-Path $configScript)) {
-    Write-Error "Configuration script not found: $configScript"
-    exit 1
-}
-
-try {
-    & $configScript -GitUserName $GitUserName -GitUserEmail $GitUserEmail -OutputPath $mofOutputPath
-    Write-Success "DSC configuration compiled."
-} catch {
-    Write-Error "Failed to compile DSC configuration: $_"
-    exit 1
-}
-
-# Apply DSC Configuration
-Write-Status "Applying DSC configuration (this may take several minutes)..."
-
-$dscError = $null
-try {
-    $dscJob = Start-DscConfiguration -Path $mofOutputPath -Wait -Verbose -Force -ErrorVariable dscError 2>&1
-
-    # Check if there were any errors in the DSC run
-    if ($dscError) {
-        Write-Warning "DSC configuration encountered errors:"
-        $dscError | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
-    }
-} catch {
-    Write-Error "Failed to apply DSC configuration: $_"
-    exit 1
-}
-
-# Refresh PATH after installations
+# ============================================================
+# STEP 3: Configure Git
+# ============================================================
+Write-Status "Configuring Git..."
 Refresh-EnvironmentPath
+$git = Get-Command git -ErrorAction SilentlyContinue
+if ($git) {
+    # Configure user name
+    $currentName = git config --global user.name 2>$null
+    if ($currentName -ne $GitUserName) {
+        git config --global user.name $GitUserName
+        Write-Success "Git user.name set to: $GitUserName"
+    } else {
+        Write-Success "Git user.name already configured."
+    }
 
-# Verify installations
+    # Configure user email
+    $currentEmail = git config --global user.email 2>$null
+    if ($currentEmail -ne $GitUserEmail) {
+        git config --global user.email $GitUserEmail
+        Write-Success "Git user.email set to: $GitUserEmail"
+    } else {
+        Write-Success "Git user.email already configured."
+    }
+
+    # Configure credential helper
+    $helper = git config --global credential.helper 2>$null
+    if ($helper -ne "manager") {
+        git config --global credential.helper manager
+        Write-Success "Git credential.helper set to: manager"
+    } else {
+        Write-Success "Git credential.helper already configured."
+    }
+} else {
+    Write-Warning "Git not available for configuration. Will configure after terminal restart."
+}
+
+# ============================================================
+# STEP 4: Install GitHub CLI
+# ============================================================
+Write-Status "Checking for GitHub CLI..."
+$gh = Get-Command gh -ErrorAction SilentlyContinue
+if (-not $gh) {
+    Write-Status "Installing GitHub CLI..."
+    winget install --id GitHub.cli --accept-source-agreements --accept-package-agreements --silent
+    Refresh-EnvironmentPath
+
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if ($gh) {
+        Write-Success "GitHub CLI installed successfully."
+    } else {
+        Write-Warning "GitHub CLI installation may require a terminal restart."
+    }
+} else {
+    Write-Success "GitHub CLI is already installed."
+}
+
+# ============================================================
+# STEP 5: Install Visual Studio Code
+# ============================================================
+Write-Status "Checking for VS Code..."
+$code = Get-Command code -ErrorAction SilentlyContinue
+if (-not $code) {
+    Write-Status "Installing Visual Studio Code..."
+    winget install --id Microsoft.VisualStudioCode --accept-source-agreements --accept-package-agreements --silent
+    Refresh-EnvironmentPath
+
+    # Also check common VS Code paths
+    $vscodePaths = @(
+        "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin",
+        "$env:ProgramFiles\Microsoft VS Code\bin"
+    )
+    foreach ($path in $vscodePaths) {
+        if ((Test-Path $path) -and ($env:Path -notlike "*$path*")) {
+            $env:Path = "$env:Path;$path"
+        }
+    }
+
+    $code = Get-Command code -ErrorAction SilentlyContinue
+    if ($code) {
+        Write-Success "VS Code installed successfully."
+    } else {
+        Write-Warning "VS Code installation may require a terminal restart."
+    }
+} else {
+    Write-Success "VS Code is already installed."
+}
+
+# ============================================================
+# STEP 6: Install Claude Code Extension
+# ============================================================
+Write-Status "Checking for Claude Code extension..."
+Refresh-EnvironmentPath
+$code = Get-Command code -ErrorAction SilentlyContinue
+
+if ($code) {
+    $extensions = code --list-extensions 2>$null
+    if ($extensions -contains "anthropic.claude-code") {
+        Write-Success "Claude Code extension is already installed."
+    } else {
+        Write-Status "Installing Claude Code extension..."
+        code --install-extension anthropic.claude-code --force
+
+        # Verify
+        $extensions = code --list-extensions 2>$null
+        if ($extensions -contains "anthropic.claude-code") {
+            Write-Success "Claude Code extension installed successfully."
+        } else {
+            Write-Warning "Claude Code extension installation may have failed."
+        }
+    }
+} else {
+    Write-Warning "VS Code not available. Claude Code extension will need to be installed manually."
+}
+
+# ============================================================
+# VERIFICATION
+# ============================================================
 Write-Status "Verifying installations..."
+Refresh-EnvironmentPath
 
 $installFailed = $false
 
@@ -231,7 +309,7 @@ if ($git) {
     $gitVersion = git --version
     Write-Success "Git: $gitVersion"
 } else {
-    Write-Warning "Git: Not found in PATH"
+    Write-Warning "Git: Not found in PATH (restart terminal)"
     $installFailed = $true
 }
 
@@ -241,7 +319,7 @@ if ($gh) {
     $ghVersion = gh --version | Select-Object -First 1
     Write-Success "GitHub CLI: $ghVersion"
 } else {
-    Write-Warning "GitHub CLI: Not found in PATH"
+    Write-Warning "GitHub CLI: Not found in PATH (restart terminal)"
     $installFailed = $true
 }
 
@@ -251,7 +329,7 @@ if ($code) {
     $codeVersion = code --version | Select-Object -First 1
     Write-Success "VS Code: $codeVersion"
 } else {
-    Write-Warning "VS Code: Not found in PATH"
+    Write-Warning "VS Code: Not found in PATH (restart terminal)"
     $installFailed = $true
 }
 
@@ -266,28 +344,7 @@ if ($code) {
     }
 }
 
-# If installations failed, offer to retry or exit
-if ($installFailed) {
-    Write-Host ""
-    Write-Warning "Some components were not installed successfully."
-    Write-Host "This may be due to WinRM/DSC issues or network problems." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "You can try:" -ForegroundColor Cyan
-    Write-Host "  1. Run this script again"
-    Write-Host "  2. Install components manually using winget:"
-    Write-Host "     winget install Git.Git"
-    Write-Host "     winget install GitHub.cli"
-    Write-Host "     winget install Microsoft.VisualStudioCode"
-    Write-Host ""
-
-    $continueChoice = Read-Host "Continue with post-installation steps anyway? (y/N)"
-    if ($continueChoice -ne 'y' -and $continueChoice -ne 'Y') {
-        Write-Host "Setup incomplete. Please resolve issues and run again." -ForegroundColor Yellow
-        exit 1
-    }
-}
-
-# Check Git config (only if git is available)
+# Check Git config
 if ($git) {
     $configuredName = git config --global user.name 2>$null
     $configuredEmail = git config --global user.email 2>$null
@@ -296,7 +353,15 @@ if ($git) {
     }
 }
 
-# Post-installation tasks
+if ($installFailed) {
+    Write-Host ""
+    Write-Warning "Some components may not be visible until you restart your terminal."
+    Write-Host ""
+}
+
+# ============================================================
+# POST-INSTALLATION
+# ============================================================
 Write-Host ""
 Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host "                    POST-INSTALLATION STEPS                     " -ForegroundColor Cyan

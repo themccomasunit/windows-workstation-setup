@@ -1,6 +1,6 @@
 # Windows Workstation Setup
 
-Automated PowerShell DSC configuration for ephemeral Windows sandbox environments. Installs and configures development tools with a single command.
+Automated PowerShell script for ephemeral Windows sandbox environments. Installs and configures development tools with a single command.
 
 ## What Gets Installed
 
@@ -19,10 +19,12 @@ irm https://raw.githubusercontent.com/themccomasunit/windows-workstation-setup/m
 
 The script will:
 1. Download the setup files
-2. Prompt for your Git name and email
-3. Install all components using PowerShell DSC
-4. Guide you through GitHub CLI authentication
-5. Optionally open VS Code when complete
+2. Install winget if not present
+3. Install Git, GitHub CLI, VS Code via winget
+4. Configure Git with your identity
+5. Install Claude Code extension
+6. Guide you through GitHub CLI authentication
+7. Optionally open VS Code when complete
 
 ## Requirements
 
@@ -30,7 +32,6 @@ The script will:
 - PowerShell 5.1 or later
 - Administrator privileges
 - Internet connection
-- winget (pre-installed on Windows 10/11)
 
 ## Manual Installation
 
@@ -50,9 +51,7 @@ cd windows-workstation-setup
 ```
 windows-workstation-setup/
 ├── bootstrap.ps1                        # Remote bootstrap script
-├── Setup-Workstation.ps1                # Main setup orchestrator
-├── configurations/
-│   └── WorkstationConfig.ps1            # DSC configuration
+├── Setup-Workstation.ps1                # Main setup script
 ├── resources/
 │   └── Install-ClaudeCode.ps1           # Standalone extension installer
 └── README.md
@@ -91,32 +90,30 @@ Or install manually in VS Code:
 2. Search for "Claude Code"
 3. Click Install
 
-### DSC configuration fails
-Check the verbose output for specific errors. Common issues:
+### Installation fails
+Check the output for specific errors. Common issues:
 - Insufficient permissions (run as Administrator)
 - Network connectivity problems
 - winget package source issues
 
 ## Customization
 
-To add additional tools, edit `configurations/WorkstationConfig.ps1` and add new `Script` resources following the existing pattern.
+To add additional tools, edit `Setup-Workstation.ps1` and add new installation sections following the existing pattern.
 
 Example for adding Node.js:
 ```powershell
-Script InstallNodeJS {
-    DependsOn = '[Script]EnsureWinget'
-    GetScript = {
-        $node = Get-Command node -ErrorAction SilentlyContinue
-        return @{ Result = ($null -ne $node) }
-    }
-    TestScript = {
-        $node = Get-Command node -ErrorAction SilentlyContinue
-        return ($null -ne $node)
-    }
-    SetScript = {
-        winget install --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-    }
+# ============================================================
+# STEP X: Install Node.js
+# ============================================================
+Write-Status "Checking for Node.js..."
+$node = Get-Command node -ErrorAction SilentlyContinue
+if (-not $node) {
+    Write-Status "Installing Node.js..."
+    winget install --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent
+    Refresh-EnvironmentPath
+    Write-Success "Node.js installed successfully."
+} else {
+    Write-Success "Node.js is already installed."
 }
 ```
 
