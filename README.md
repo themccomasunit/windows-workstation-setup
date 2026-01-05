@@ -14,7 +14,7 @@ Automated PowerShell DSC configuration for ephemeral Windows sandbox environment
 Open PowerShell **as Administrator** and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/themccomasunit/windows-workstation-setup/main/bootstrap.ps1 | iex
+irm https://raw.githubusercontent.com/themccomasunit/windows-workstation-setup/master/bootstrap.ps1 | iex
 ```
 
 The script will:

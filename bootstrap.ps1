@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Downloads and executes the workstation configuration from GitHub.
-    Run this with: irm https://raw.githubusercontent.com/themccomasunit/windows-workstation-setup/main/bootstrap.ps1 | iex
+    Run this with: irm https://raw.githubusercontent.com/themccomasunit/windows-workstation-setup/master/bootstrap.ps1 | iex
 
 .NOTES
     Author: themccomasunit
@@ -17,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 # Configuration
 $RepoOwner = "themccomasunit"
 $RepoName = "windows-workstation-setup"
-$Branch = "main"
+$Branch = "master"
 $TempPath = Join-Path $env:TEMP "workstation-setup"
 
 function Write-Status {
