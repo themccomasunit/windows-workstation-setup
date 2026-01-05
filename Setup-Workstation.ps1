@@ -68,12 +68,7 @@ Write-Host "Git Configuration:" -ForegroundColor Yellow
 Write-Host "  Name:  $GitUserName"
 Write-Host "  Email: $GitUserEmail"
 Write-Host ""
-
-$confirm = Read-Host "Proceed with installation? (Y/n)"
-if ($confirm -eq 'n' -or $confirm -eq 'N') {
-    Write-Host "Installation cancelled." -ForegroundColor Yellow
-    exit 0
-}
+Write-Host "Proceeding with installation..." -ForegroundColor Green
 
 # Ensure WinRM is configured (required for DSC)
 Write-Status "Configuring WinRM for DSC..."
