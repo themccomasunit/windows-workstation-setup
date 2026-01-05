@@ -60,49 +60,63 @@ Configuration WorkstationConfig {
                     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
                 }
 
-                # Download dependencies and winget
-                $downloads = @(
-                    @{
-                        Name = "VCLibs"
-                        Url = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
-                        File = "Microsoft.VCLibs.x64.14.00.Desktop.appx"
-                    },
-                    @{
-                        Name = "UI.Xaml"
-                        Url = "https://github.com/nicovs/NuGetPackageExplorer/releases/download/6.1.0.2/Microsoft.UI.Xaml.2.8.x64.appx"
-                        File = "Microsoft.UI.Xaml.2.8.x64.appx"
-                    },
-                    @{
-                        Name = "Winget"
-                        Url = "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
-                        File = "Microsoft.DesktopAppInstaller.msixbundle"
-                    }
-                )
-
                 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-                foreach ($download in $downloads) {
-                    $filePath = Join-Path $tempDir $download.File
-                    Write-Host "Downloading $($download.Name)..."
-                    try {
-                        Invoke-WebRequest -Uri $download.Url -OutFile $filePath -UseBasicParsing
-                    } catch {
-                        Write-Host "Failed to download $($download.Name): $_"
-                        throw "Failed to download winget dependencies"
+                # Download VCLibs
+                Write-Host "Downloading VCLibs..."
+                $vclibsPath = Join-Path $tempDir "Microsoft.VCLibs.x64.14.00.Desktop.appx"
+                try {
+                    Invoke-WebRequest -Uri "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx" -OutFile $vclibsPath -UseBasicParsing
+                } catch {
+                    Write-Host "Failed to download VCLibs: $_"
+                    throw "Failed to download winget dependencies"
+                }
+
+                # Download UI.Xaml from NuGet (official source)
+                Write-Host "Downloading UI.Xaml from NuGet..."
+                $nugetPath = Join-Path $tempDir "microsoft.ui.xaml.nupkg"
+                $xamlPath = Join-Path $tempDir "Microsoft.UI.Xaml.2.8.appx"
+                try {
+                    # Download the NuGet package
+                    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.8.6" -OutFile $nugetPath -UseBasicParsing
+
+                    # Extract the appx from the nupkg (it's just a zip)
+                    $extractPath = Join-Path $tempDir "xaml-extract"
+                    Expand-Archive -Path $nugetPath -DestinationPath $extractPath -Force
+
+                    # Find and copy the x64 appx
+                    $appxFile = Get-ChildItem -Path $extractPath -Recurse -Filter "Microsoft.UI.Xaml.2.8.x64.appx" | Select-Object -First 1
+                    if ($appxFile) {
+                        Copy-Item -Path $appxFile.FullName -Destination $xamlPath -Force
+                    } else {
+                        throw "Could not find UI.Xaml appx in NuGet package"
                     }
+                } catch {
+                    Write-Host "Failed to download/extract UI.Xaml: $_"
+                    throw "Failed to download winget dependencies"
+                }
+
+                # Download winget
+                Write-Host "Downloading Winget..."
+                $wingetPath = Join-Path $tempDir "Microsoft.DesktopAppInstaller.msixbundle"
+                try {
+                    Invoke-WebRequest -Uri "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -OutFile $wingetPath -UseBasicParsing
+                } catch {
+                    Write-Host "Failed to download Winget: $_"
+                    throw "Failed to download winget dependencies"
                 }
 
                 # Install VCLibs dependency
                 Write-Host "Installing VCLibs..."
-                Add-AppxPackage -Path (Join-Path $tempDir "Microsoft.VCLibs.x64.14.00.Desktop.appx") -ErrorAction SilentlyContinue
+                Add-AppxPackage -Path $vclibsPath -ErrorAction SilentlyContinue
 
                 # Install UI.Xaml dependency
                 Write-Host "Installing UI.Xaml..."
-                Add-AppxPackage -Path (Join-Path $tempDir "Microsoft.UI.Xaml.2.8.x64.appx") -ErrorAction SilentlyContinue
+                Add-AppxPackage -Path $xamlPath -ErrorAction SilentlyContinue
 
                 # Install winget
                 Write-Host "Installing Winget..."
-                Add-AppxPackage -Path (Join-Path $tempDir "Microsoft.DesktopAppInstaller.msixbundle") -ErrorAction Stop
+                Add-AppxPackage -Path $wingetPath -ErrorAction Stop
 
                 # Clean up
                 Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -111,9 +125,9 @@ Configuration WorkstationConfig {
                 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
                 # Add winget to path if not already there
-                $wingetPath = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
-                if ($env:Path -notlike "*$wingetPath*") {
-                    $env:Path = "$env:Path;$wingetPath"
+                $wingetPathDir = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
+                if ($env:Path -notlike "*$wingetPathDir*") {
+                    $env:Path = "$env:Path;$wingetPathDir"
                 }
 
                 # Verify installation
