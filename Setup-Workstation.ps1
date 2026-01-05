@@ -136,9 +136,15 @@ try {
 # Apply DSC Configuration
 Write-Status "Applying DSC configuration (this may take several minutes)..."
 
+$dscError = $null
 try {
-    Start-DscConfiguration -Path $mofOutputPath -Wait -Verbose -Force
-    Write-Success "DSC configuration applied successfully."
+    $dscJob = Start-DscConfiguration -Path $mofOutputPath -Wait -Verbose -Force -ErrorVariable dscError 2>&1
+
+    # Check if there were any errors in the DSC run
+    if ($dscError) {
+        Write-Warning "DSC configuration encountered errors:"
+        $dscError | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+    }
 } catch {
     Write-Error "Failed to apply DSC configuration: $_"
     exit 1
@@ -150,57 +156,78 @@ Refresh-EnvironmentPath
 # Verify installations
 Write-Status "Verifying installations..."
 
-$verificationResults = @()
+$installFailed = $false
 
 # Check Git
 $git = Get-Command git -ErrorAction SilentlyContinue
 if ($git) {
     $gitVersion = git --version
-    $verificationResults += @{ Name = "Git"; Status = "Installed"; Version = $gitVersion }
     Write-Success "Git: $gitVersion"
 } else {
-    $verificationResults += @{ Name = "Git"; Status = "Not Found"; Version = "N/A" }
     Write-Warning "Git: Not found in PATH"
+    $installFailed = $true
 }
 
 # Check GitHub CLI
 $gh = Get-Command gh -ErrorAction SilentlyContinue
 if ($gh) {
     $ghVersion = gh --version | Select-Object -First 1
-    $verificationResults += @{ Name = "GitHub CLI"; Status = "Installed"; Version = $ghVersion }
     Write-Success "GitHub CLI: $ghVersion"
 } else {
-    $verificationResults += @{ Name = "GitHub CLI"; Status = "Not Found"; Version = "N/A" }
     Write-Warning "GitHub CLI: Not found in PATH"
+    $installFailed = $true
 }
 
 # Check VS Code
 $code = Get-Command code -ErrorAction SilentlyContinue
 if ($code) {
     $codeVersion = code --version | Select-Object -First 1
-    $verificationResults += @{ Name = "VS Code"; Status = "Installed"; Version = $codeVersion }
     Write-Success "VS Code: $codeVersion"
 } else {
-    $verificationResults += @{ Name = "VS Code"; Status = "Not Found"; Version = "N/A" }
     Write-Warning "VS Code: Not found in PATH"
+    $installFailed = $true
 }
 
 # Check Claude Code Extension
 if ($code) {
     $extensions = code --list-extensions 2>$null
     if ($extensions -contains "anthropic.claude-code") {
-        $verificationResults += @{ Name = "Claude Code"; Status = "Installed"; Version = "Extension" }
         Write-Success "Claude Code Extension: Installed"
     } else {
-        $verificationResults += @{ Name = "Claude Code"; Status = "Not Found"; Version = "N/A" }
         Write-Warning "Claude Code Extension: Not installed"
+        $installFailed = $true
     }
 }
 
-# Check Git config
-$configuredName = git config --global user.name 2>$null
-$configuredEmail = git config --global user.email 2>$null
-Write-Success "Git configured as: $configuredName <$configuredEmail>"
+# If installations failed, offer to retry or exit
+if ($installFailed) {
+    Write-Host ""
+    Write-Warning "Some components were not installed successfully."
+    Write-Host "This may be due to WinRM/DSC issues or network problems." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "You can try:" -ForegroundColor Cyan
+    Write-Host "  1. Run this script again"
+    Write-Host "  2. Install components manually using winget:"
+    Write-Host "     winget install Git.Git"
+    Write-Host "     winget install GitHub.cli"
+    Write-Host "     winget install Microsoft.VisualStudioCode"
+    Write-Host ""
+
+    $continueChoice = Read-Host "Continue with post-installation steps anyway? (y/N)"
+    if ($continueChoice -ne 'y' -and $continueChoice -ne 'Y') {
+        Write-Host "Setup incomplete. Please resolve issues and run again." -ForegroundColor Yellow
+        exit 1
+    }
+}
+
+# Check Git config (only if git is available)
+if ($git) {
+    $configuredName = git config --global user.name 2>$null
+    $configuredEmail = git config --global user.email 2>$null
+    if ($configuredName -and $configuredEmail) {
+        Write-Success "Git configured as: $configuredName <$configuredEmail>"
+    }
+}
 
 # Post-installation tasks
 Write-Host ""
