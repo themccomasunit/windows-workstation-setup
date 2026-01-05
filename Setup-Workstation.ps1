@@ -57,26 +57,14 @@ Write-Host @"
 # Get script directory
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# Prompt for Git configuration
-Write-Host "Please provide your Git configuration:" -ForegroundColor Yellow
-Write-Host ""
+# ============================================================
+# CONFIGURATION - Edit these values for your environment
+# ============================================================
+$GitUserName = "themccomasunit"
+$GitUserEmail = "themccomasunit@gmail.com"
+# ============================================================
 
-do {
-    $GitUserName = Read-Host "Enter your name for Git commits (e.g., John Doe)"
-    if ([string]::IsNullOrWhiteSpace($GitUserName)) {
-        Write-Warning "Name cannot be empty. Please try again."
-    }
-} while ([string]::IsNullOrWhiteSpace($GitUserName))
-
-do {
-    $GitUserEmail = Read-Host "Enter your email for Git commits (e.g., john@example.com)"
-    if ([string]::IsNullOrWhiteSpace($GitUserEmail)) {
-        Write-Warning "Email cannot be empty. Please try again."
-    }
-} while ([string]::IsNullOrWhiteSpace($GitUserEmail))
-
-Write-Host ""
-Write-Host "Configuration Summary:" -ForegroundColor Yellow
+Write-Host "Git Configuration:" -ForegroundColor Yellow
 Write-Host "  Name:  $GitUserName"
 Write-Host "  Email: $GitUserEmail"
 Write-Host ""
