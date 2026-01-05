@@ -84,12 +84,18 @@ Configuration WorkstationConfig {
                     $extractPath = Join-Path $tempDir "xaml-extract"
                     Expand-Archive -Path $nugetZipPath -DestinationPath $extractPath -Force
 
-                    # Find and copy the x64 appx
-                    $appxFile = Get-ChildItem -Path $extractPath -Recurse -Filter "Microsoft.UI.Xaml.2.8.x64.appx" | Select-Object -First 1
-                    if ($appxFile) {
-                        Copy-Item -Path $appxFile.FullName -Destination $xamlPath -Force
+                    # Find and copy the x64 appx (located at tools\AppX\x64\Release\Microsoft.UI.Xaml.2.8.appx)
+                    $appxFile = Join-Path $extractPath "tools\AppX\x64\Release\Microsoft.UI.Xaml.2.8.appx"
+                    if (Test-Path $appxFile) {
+                        Copy-Item -Path $appxFile -Destination $xamlPath -Force
                     } else {
-                        throw "Could not find UI.Xaml appx in NuGet package"
+                        # Fallback: search recursively
+                        $foundAppx = Get-ChildItem -Path $extractPath -Recurse -Filter "Microsoft.UI.Xaml.2.8.appx" | Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1
+                        if ($foundAppx) {
+                            Copy-Item -Path $foundAppx.FullName -Destination $xamlPath -Force
+                        } else {
+                            throw "Could not find UI.Xaml appx in NuGet package"
+                        }
                     }
                 } catch {
                     Write-Host "Failed to download/extract UI.Xaml: $_"
