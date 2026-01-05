@@ -70,6 +70,90 @@ Write-Host "  Email: $GitUserEmail"
 Write-Host ""
 Write-Host "Proceeding with installation..." -ForegroundColor Green
 
+# Ensure winget is installed (must run as current user, not via DSC/SYSTEM)
+Write-Status "Checking for winget..."
+$winget = Get-Command winget -ErrorAction SilentlyContinue
+if (-not $winget) {
+    Write-Status "Installing winget (App Installer)..."
+
+    $tempDir = Join-Path $env:TEMP "winget-install"
+    if (-not (Test-Path $tempDir)) {
+        New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+    }
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    # Download VCLibs
+    Write-Host "  Downloading VCLibs..." -ForegroundColor Gray
+    $vclibsPath = Join-Path $tempDir "Microsoft.VCLibs.x64.14.00.Desktop.appx"
+    try {
+        Invoke-WebRequest -Uri "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx" -OutFile $vclibsPath -UseBasicParsing
+    } catch {
+        Write-Warning "Failed to download VCLibs: $_"
+    }
+
+    # Download UI.Xaml from NuGet
+    Write-Host "  Downloading UI.Xaml..." -ForegroundColor Gray
+    $nugetZipPath = Join-Path $tempDir "microsoft.ui.xaml.zip"
+    $xamlPath = Join-Path $tempDir "Microsoft.UI.Xaml.2.8.appx"
+    try {
+        Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.8.6" -OutFile $nugetZipPath -UseBasicParsing
+        $extractPath = Join-Path $tempDir "xaml-extract"
+        Expand-Archive -Path $nugetZipPath -DestinationPath $extractPath -Force
+        $appxFile = Join-Path $extractPath "tools\AppX\x64\Release\Microsoft.UI.Xaml.2.8.appx"
+        if (Test-Path $appxFile) {
+            Copy-Item -Path $appxFile -Destination $xamlPath -Force
+        }
+    } catch {
+        Write-Warning "Failed to download UI.Xaml: $_"
+    }
+
+    # Download winget
+    Write-Host "  Downloading Winget (this may take a few minutes)..." -ForegroundColor Gray
+    $wingetBundlePath = Join-Path $tempDir "Microsoft.DesktopAppInstaller.msixbundle"
+    try {
+        Invoke-WebRequest -Uri "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -OutFile $wingetBundlePath -UseBasicParsing
+    } catch {
+        Write-Warning "Failed to download Winget: $_"
+    }
+
+    # Install packages (as current user)
+    Write-Host "  Installing VCLibs..." -ForegroundColor Gray
+    if (Test-Path $vclibsPath) {
+        Add-AppxPackage -Path $vclibsPath -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "  Installing UI.Xaml..." -ForegroundColor Gray
+    if (Test-Path $xamlPath) {
+        Add-AppxPackage -Path $xamlPath -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "  Installing Winget..." -ForegroundColor Gray
+    if (Test-Path $wingetBundlePath) {
+        Add-AppxPackage -Path $wingetBundlePath -ErrorAction SilentlyContinue
+    }
+
+    # Clean up
+    Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+
+    # Refresh PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $wingetPathDir = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
+    if ($env:Path -notlike "*$wingetPathDir*") {
+        $env:Path = "$env:Path;$wingetPathDir"
+    }
+
+    # Verify
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Success "Winget installed successfully."
+    } else {
+        Write-Warning "Winget installation may have failed. Will attempt to continue..."
+    }
+} else {
+    Write-Success "Winget is already installed."
+}
+
 # Ensure WinRM is configured (required for DSC)
 Write-Status "Configuring WinRM for DSC..."
 try {

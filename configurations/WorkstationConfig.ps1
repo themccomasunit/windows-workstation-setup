@@ -41,105 +41,39 @@ Configuration WorkstationConfig {
 
     Node 'localhost' {
 
-        # Ensure winget is available - install if missing
+        # Verify winget is available (should be installed by Setup-Workstation.ps1 before DSC runs)
         Script EnsureWinget {
             GetScript = {
                 $winget = Get-Command winget -ErrorAction SilentlyContinue
                 return @{ Result = ($null -ne $winget) }
             }
             TestScript = {
+                # Check common winget locations since DSC runs as SYSTEM
+                $wingetPaths = @(
+                    "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe",
+                    "C:\Users\*\AppData\Local\Microsoft\WindowsApps\winget.exe",
+                    "$env:ProgramFiles\WindowsApps\Microsoft.DesktopAppInstaller_*\winget.exe"
+                )
+                foreach ($pattern in $wingetPaths) {
+                    if (Get-Item -Path $pattern -ErrorAction SilentlyContinue) {
+                        return $true
+                    }
+                }
                 $winget = Get-Command winget -ErrorAction SilentlyContinue
                 return ($null -ne $winget)
             }
             SetScript = {
-                Write-Host "Winget not found. Installing winget (App Installer)..."
+                # Winget should already be installed by Setup-Workstation.ps1
+                # DSC/SYSTEM cannot install AppX packages, so we just verify it exists
+                Write-Host "Winget should be pre-installed. Checking..."
 
-                # Create temp directory for downloads
-                $tempDir = Join-Path $env:TEMP "winget-install"
-                if (-not (Test-Path $tempDir)) {
-                    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-                }
-
-                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-                # Download VCLibs
-                Write-Host "Downloading VCLibs..."
-                $vclibsPath = Join-Path $tempDir "Microsoft.VCLibs.x64.14.00.Desktop.appx"
-                try {
-                    Invoke-WebRequest -Uri "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx" -OutFile $vclibsPath -UseBasicParsing
-                } catch {
-                    Write-Host "Failed to download VCLibs: $_"
-                    throw "Failed to download winget dependencies"
-                }
-
-                # Download UI.Xaml from NuGet (official source)
-                Write-Host "Downloading UI.Xaml from NuGet..."
-                $nugetZipPath = Join-Path $tempDir "microsoft.ui.xaml.zip"
-                $xamlPath = Join-Path $tempDir "Microsoft.UI.Xaml.2.8.appx"
-                try {
-                    # Download the NuGet package (save as .zip so Expand-Archive accepts it)
-                    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.8.6" -OutFile $nugetZipPath -UseBasicParsing
-
-                    # Extract the appx from the nupkg (it's just a zip)
-                    $extractPath = Join-Path $tempDir "xaml-extract"
-                    Expand-Archive -Path $nugetZipPath -DestinationPath $extractPath -Force
-
-                    # Find and copy the x64 appx (located at tools\AppX\x64\Release\Microsoft.UI.Xaml.2.8.appx)
-                    $appxFile = Join-Path $extractPath "tools\AppX\x64\Release\Microsoft.UI.Xaml.2.8.appx"
-                    if (Test-Path $appxFile) {
-                        Copy-Item -Path $appxFile -Destination $xamlPath -Force
-                    } else {
-                        # Fallback: search recursively
-                        $foundAppx = Get-ChildItem -Path $extractPath -Recurse -Filter "Microsoft.UI.Xaml.2.8.appx" | Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1
-                        if ($foundAppx) {
-                            Copy-Item -Path $foundAppx.FullName -Destination $xamlPath -Force
-                        } else {
-                            throw "Could not find UI.Xaml appx in NuGet package"
-                        }
-                    }
-                } catch {
-                    Write-Host "Failed to download/extract UI.Xaml: $_"
-                    throw "Failed to download winget dependencies"
-                }
-
-                # Download winget
-                Write-Host "Downloading Winget..."
-                $wingetPath = Join-Path $tempDir "Microsoft.DesktopAppInstaller.msixbundle"
-                try {
-                    Invoke-WebRequest -Uri "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -OutFile $wingetPath -UseBasicParsing
-                } catch {
-                    Write-Host "Failed to download Winget: $_"
-                    throw "Failed to download winget dependencies"
-                }
-
-                # Install VCLibs dependency
-                Write-Host "Installing VCLibs..."
-                Add-AppxPackage -Path $vclibsPath -ErrorAction SilentlyContinue
-
-                # Install UI.Xaml dependency
-                Write-Host "Installing UI.Xaml..."
-                Add-AppxPackage -Path $xamlPath -ErrorAction SilentlyContinue
-
-                # Install winget
-                Write-Host "Installing Winget..."
-                Add-AppxPackage -Path $wingetPath -ErrorAction Stop
-
-                # Clean up
-                Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-
-                # Refresh PATH and verify
+                # Refresh PATH
                 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-                # Add winget to path if not already there
-                $wingetPathDir = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
-                if ($env:Path -notlike "*$wingetPathDir*") {
-                    $env:Path = "$env:Path;$wingetPathDir"
-                }
-
-                # Verify installation
                 $winget = Get-Command winget -ErrorAction SilentlyContinue
                 if (-not $winget) {
-                    throw "Winget installation failed. Please install manually from the Microsoft Store (App Installer)."
+                    Write-Host "WARNING: Winget not found. It should have been installed before DSC ran."
+                    Write-Host "The script will attempt to continue, but some installations may fail."
                 }
 
                 Write-Host "Winget installed successfully."
