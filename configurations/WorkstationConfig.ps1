@@ -74,15 +74,15 @@ Configuration WorkstationConfig {
 
                 # Download UI.Xaml from NuGet (official source)
                 Write-Host "Downloading UI.Xaml from NuGet..."
-                $nugetPath = Join-Path $tempDir "microsoft.ui.xaml.nupkg"
+                $nugetZipPath = Join-Path $tempDir "microsoft.ui.xaml.zip"
                 $xamlPath = Join-Path $tempDir "Microsoft.UI.Xaml.2.8.appx"
                 try {
-                    # Download the NuGet package
-                    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.8.6" -OutFile $nugetPath -UseBasicParsing
+                    # Download the NuGet package (save as .zip so Expand-Archive accepts it)
+                    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.8.6" -OutFile $nugetZipPath -UseBasicParsing
 
                     # Extract the appx from the nupkg (it's just a zip)
                     $extractPath = Join-Path $tempDir "xaml-extract"
-                    Expand-Archive -Path $nugetPath -DestinationPath $extractPath -Force
+                    Expand-Archive -Path $nugetZipPath -DestinationPath $extractPath -Force
 
                     # Find and copy the x64 appx
                     $appxFile = Get-ChildItem -Path $extractPath -Recurse -Filter "Microsoft.UI.Xaml.2.8.x64.appx" | Select-Object -First 1
