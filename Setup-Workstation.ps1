@@ -46,10 +46,12 @@ Write-Host @"
 ║            Windows Workstation Setup                          ║
 ║                                                               ║
 ║   This script will install and configure:                     ║
+║   - PowerShell 7 (latest)                                     ║
 ║   - Git for Windows                                           ║
 ║   - GitHub CLI (gh)                                           ║
 ║   - Visual Studio Code                                        ║
 ║   - Claude Code Extension                                     ║
+║   - Google Chrome (set as default browser)                    ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 "@ -ForegroundColor Cyan
@@ -155,13 +157,39 @@ if (-not $winget) {
 }
 
 # ============================================================
-# STEP 2: Install Git for Windows
+# STEP 2: Install PowerShell 7 (latest)
+# ============================================================
+Write-Status "Checking for PowerShell 7..."
+$pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+if (-not $pwsh) {
+    Write-Status "Installing PowerShell 7..."
+    winget install --id Microsoft.PowerShell --source winget --accept-source-agreements --accept-package-agreements --silent
+    Refresh-EnvironmentPath
+
+    # Add PowerShell 7 to path manually if needed
+    $pwshPath = "$env:ProgramFiles\PowerShell\7"
+    if ((Test-Path $pwshPath) -and ($env:Path -notlike "*$pwshPath*")) {
+        $env:Path = "$env:Path;$pwshPath"
+    }
+
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($pwsh) {
+        Write-Success "PowerShell 7 installed successfully."
+    } else {
+        Write-Warning "PowerShell 7 installation may require a terminal restart."
+    }
+} else {
+    Write-Success "PowerShell 7 is already installed."
+}
+
+# ============================================================
+# STEP 3: Install Git for Windows
 # ============================================================
 Write-Status "Checking for Git..."
 $git = Get-Command git -ErrorAction SilentlyContinue
 if (-not $git) {
     Write-Status "Installing Git for Windows..."
-    winget install --id Git.Git --accept-source-agreements --accept-package-agreements --silent
+    winget install --id Git.Git --source winget --accept-source-agreements --accept-package-agreements --silent
     Refresh-EnvironmentPath
 
     # Also add Git to path manually if needed
@@ -181,7 +209,7 @@ if (-not $git) {
 }
 
 # ============================================================
-# STEP 3: Configure Git
+# STEP 4: Configure Git
 # ============================================================
 Write-Status "Configuring Git..."
 Refresh-EnvironmentPath
@@ -218,13 +246,13 @@ if ($git) {
 }
 
 # ============================================================
-# STEP 4: Install GitHub CLI
+# STEP 5: Install GitHub CLI
 # ============================================================
 Write-Status "Checking for GitHub CLI..."
 $gh = Get-Command gh -ErrorAction SilentlyContinue
 if (-not $gh) {
     Write-Status "Installing GitHub CLI..."
-    winget install --id GitHub.cli --accept-source-agreements --accept-package-agreements --silent
+    winget install --id GitHub.cli --source winget --accept-source-agreements --accept-package-agreements --silent
     Refresh-EnvironmentPath
 
     $gh = Get-Command gh -ErrorAction SilentlyContinue
@@ -238,13 +266,13 @@ if (-not $gh) {
 }
 
 # ============================================================
-# STEP 5: Install Visual Studio Code
+# STEP 6: Install Visual Studio Code
 # ============================================================
 Write-Status "Checking for VS Code..."
 $code = Get-Command code -ErrorAction SilentlyContinue
 if (-not $code) {
     Write-Status "Installing Visual Studio Code..."
-    winget install --id Microsoft.VisualStudioCode --accept-source-agreements --accept-package-agreements --silent
+    winget install --id Microsoft.VisualStudioCode --source winget --accept-source-agreements --accept-package-agreements --silent
     Refresh-EnvironmentPath
 
     # Also check common VS Code paths
@@ -269,7 +297,7 @@ if (-not $code) {
 }
 
 # ============================================================
-# STEP 6: Install Claude Code Extension
+# STEP 7: Install Claude Code Extension
 # ============================================================
 Write-Status "Checking for Claude Code extension..."
 Refresh-EnvironmentPath
@@ -296,12 +324,73 @@ if ($code) {
 }
 
 # ============================================================
+# STEP 8: Install Google Chrome and Set as Default Browser
+# ============================================================
+Write-Status "Checking for Google Chrome..."
+$chromePath = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
+$chromePathX86 = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+
+if (-not (Test-Path $chromePath) -and -not (Test-Path $chromePathX86)) {
+    Write-Status "Installing Google Chrome..."
+    winget install --id Google.Chrome --source winget --accept-source-agreements --accept-package-agreements --silent
+
+    # Wait a moment for installation to complete
+    Start-Sleep -Seconds 3
+
+    if ((Test-Path $chromePath) -or (Test-Path $chromePathX86)) {
+        Write-Success "Google Chrome installed successfully."
+    } else {
+        Write-Warning "Google Chrome installation may require a system restart."
+    }
+} else {
+    Write-Success "Google Chrome is already installed."
+}
+
+# Set Chrome as default browser
+Write-Status "Setting Google Chrome as default browser..."
+try {
+    # Use the SetUserFTA tool approach or registry method
+    # This opens the Windows Settings to let user confirm (required on Windows 10/11)
+    $progId = "ChromeHTML"
+
+    # Register Chrome protocol associations via registry
+    $protocols = @("http", "https")
+    foreach ($protocol in $protocols) {
+        $regPath = "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\$protocol\UserChoice"
+        # Note: Direct registry modification for UserChoice is protected by hash in Windows 10+
+        # The most reliable method is to use Start-Process to open default apps settings
+    }
+
+    # Open Default Apps settings for user to confirm Chrome as default
+    # This is the most reliable cross-version approach
+    Start-Process "ms-settings:defaultapps"
+    Write-Host ""
+    Write-Host "  Windows Default Apps settings has been opened." -ForegroundColor Yellow
+    Write-Host "  Please scroll down to 'Web browser' and select Google Chrome." -ForegroundColor Yellow
+    Write-Host "  Press Enter once you've set Chrome as the default browser..." -ForegroundColor Yellow
+    Read-Host
+    Write-Success "Default browser configuration completed."
+} catch {
+    Write-Warning "Could not automatically set default browser. Please set manually in Windows Settings."
+}
+
+# ============================================================
 # VERIFICATION
 # ============================================================
 Write-Status "Verifying installations..."
 Refresh-EnvironmentPath
 
 $installFailed = $false
+
+# Check PowerShell 7
+$pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+if ($pwsh) {
+    $pwshVersion = pwsh --version
+    Write-Success "PowerShell 7: $pwshVersion"
+} else {
+    Write-Warning "PowerShell 7: Not found in PATH (restart terminal)"
+    $installFailed = $true
+}
 
 # Check Git
 $git = Get-Command git -ErrorAction SilentlyContinue
@@ -342,6 +431,16 @@ if ($code) {
         Write-Warning "Claude Code Extension: Not installed"
         $installFailed = $true
     }
+}
+
+# Check Google Chrome
+$chromePath = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
+$chromePathX86 = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+if ((Test-Path $chromePath) -or (Test-Path $chromePathX86)) {
+    Write-Success "Google Chrome: Installed"
+} else {
+    Write-Warning "Google Chrome: Not installed"
+    $installFailed = $true
 }
 
 # Check Git config
@@ -398,26 +497,24 @@ Write-Host "                    SETUP COMPLETE!                             " -F
 Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
 Write-Host "Installed Components:" -ForegroundColor Cyan
+Write-Host "  - PowerShell 7 (latest)"
 Write-Host "  - Git for Windows (configured with your identity)"
 Write-Host "  - GitHub CLI"
 Write-Host "  - Visual Studio Code"
 Write-Host "  - Claude Code Extension"
+Write-Host "  - Google Chrome (default browser)"
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor Yellow
-Write-Host "  1. Open Visual Studio Code"
-Write-Host "  2. Click on the Claude Code icon in the sidebar"
-Write-Host "  3. Sign in to authenticate Claude Code"
+Write-Host "  1. Click on the Claude Code icon in the VS Code sidebar"
+Write-Host "  2. Sign in to authenticate Claude Code"
 Write-Host ""
 Write-Host "Tip: You may need to restart your terminal or open a new one"
 Write-Host "     for all PATH changes to take effect."
 Write-Host ""
 
-# Open VS Code
-$openVSCode = Read-Host "Would you like to open VS Code now? (Y/n)"
-if ($openVSCode -ne 'n' -and $openVSCode -ne 'N') {
-    Write-Status "Opening Visual Studio Code..."
-    Start-Process code
-}
+# Open VS Code automatically
+Write-Status "Opening Visual Studio Code..."
+Start-Process code
 
 Write-Host ""
 Write-Host "Thank you for using Windows Workstation Setup!" -ForegroundColor Cyan

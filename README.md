@@ -4,10 +4,12 @@ Automated PowerShell script for ephemeral Windows sandbox environments. Installs
 
 ## What Gets Installed
 
+- **PowerShell 7** - Latest PowerShell version
 - **Git for Windows** - Version control with your identity pre-configured
 - **GitHub CLI (gh)** - Command-line interface for GitHub
 - **Visual Studio Code** - Code editor
 - **Claude Code Extension** - AI coding assistant for VS Code
+- **Google Chrome** - Web browser (set as system default)
 
 ## Quick Start
 
@@ -20,11 +22,12 @@ irm https://raw.githubusercontent.com/themccomasunit/windows-workstation-setup/m
 The script will:
 1. Download the setup files
 2. Install winget if not present
-3. Install Git, GitHub CLI, VS Code via winget
+3. Install PowerShell 7, Git, GitHub CLI, VS Code, and Google Chrome via winget
 4. Configure Git with your identity
 5. Install Claude Code extension
-6. Guide you through GitHub CLI authentication
-7. Optionally open VS Code when complete
+6. Set Google Chrome as the default browser
+7. Guide you through GitHub CLI authentication
+8. Automatically open VS Code when complete
 
 ## Requirements
 
@@ -109,13 +112,15 @@ Write-Status "Checking for Node.js..."
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
     Write-Status "Installing Node.js..."
-    winget install --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent
+    winget install --id OpenJS.NodeJS.LTS --source winget --accept-source-agreements --accept-package-agreements --silent
     Refresh-EnvironmentPath
     Write-Success "Node.js installed successfully."
 } else {
     Write-Success "Node.js is already installed."
 }
 ```
+
+> **Note:** Always include `--source winget` in winget commands to avoid certificate errors with the Microsoft Store source.
 
 ## License
 
