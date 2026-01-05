@@ -504,17 +504,21 @@ Write-Host "  - Visual Studio Code"
 Write-Host "  - Claude Code Extension"
 Write-Host "  - Google Chrome (default browser)"
 Write-Host ""
-Write-Host "Next Steps:" -ForegroundColor Yellow
-Write-Host "  1. Click on the Claude Code icon in the VS Code sidebar"
-Write-Host "  2. Sign in to authenticate Claude Code"
-Write-Host ""
 Write-Host "Tip: You may need to restart your terminal or open a new one"
 Write-Host "     for all PATH changes to take effect."
 Write-Host ""
 
-# Open VS Code automatically
-Write-Status "Opening Visual Studio Code..."
+# Open VS Code and launch Claude Code authentication
+Write-Status "Opening Visual Studio Code with Claude Code..."
 Start-Process code
+
+# Wait for VS Code to fully launch
+Start-Sleep -Seconds 5
+
+# Open Claude Code sidebar view and trigger authentication
+# The vscode:// URI scheme can open extensions and trigger commands
+Write-Status "Launching Claude Code authentication..."
+Start-Process "vscode://anthropic.claude-code/login"
 
 Write-Host ""
 Write-Host "Thank you for using Windows Workstation Setup!" -ForegroundColor Cyan

@@ -27,7 +27,7 @@ The script will:
 5. Install Claude Code extension
 6. Set Google Chrome as the default browser
 7. Guide you through GitHub CLI authentication
-8. Automatically open VS Code when complete
+8. Automatically open VS Code and launch Claude Code authentication
 
 ## Requirements
 
