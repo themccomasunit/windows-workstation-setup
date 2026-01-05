@@ -87,6 +87,33 @@ if ($confirm -eq 'n' -or $confirm -eq 'N') {
     exit 0
 }
 
+# Ensure WinRM is configured (required for DSC)
+Write-Status "Configuring WinRM for DSC..."
+try {
+    # Enable WinRM service
+    $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
+    if ($winrmService.Status -ne 'Running') {
+        Set-Service -Name WinRM -StartupType Automatic
+        Start-Service -Name WinRM
+    }
+
+    # Quick configure WinRM for local use
+    winrm quickconfig -quiet 2>$null
+
+    # Ensure LocalAccountTokenFilterPolicy is set for local admin
+    $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+    $regName = "LocalAccountTokenFilterPolicy"
+    $currentValue = Get-ItemProperty -Path $regPath -Name $regName -ErrorAction SilentlyContinue
+    if ($currentValue.$regName -ne 1) {
+        Set-ItemProperty -Path $regPath -Name $regName -Value 1 -Type DWord -Force
+    }
+
+    Write-Success "WinRM configured successfully."
+} catch {
+    Write-Warning "Could not fully configure WinRM: $_"
+    Write-Host "Attempting to continue anyway..." -ForegroundColor Yellow
+}
+
 # Run DSC Configuration
 Write-Status "Compiling DSC configuration..."
 
