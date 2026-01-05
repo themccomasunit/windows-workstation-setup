@@ -41,7 +41,7 @@ Configuration WorkstationConfig {
 
     Node 'localhost' {
 
-        # Ensure winget is available (should be pre-installed on Windows 10/11)
+        # Ensure winget is available - install if missing
         Script EnsureWinget {
             GetScript = {
                 $winget = Get-Command winget -ErrorAction SilentlyContinue
@@ -52,9 +52,77 @@ Configuration WorkstationConfig {
                 return ($null -ne $winget)
             }
             SetScript = {
-                # Winget should be pre-installed, but if not, install App Installer from Microsoft Store
-                Write-Host "Winget not found. Please install 'App Installer' from the Microsoft Store."
-                throw "Winget is required but not installed."
+                Write-Host "Winget not found. Installing winget (App Installer)..."
+
+                # Create temp directory for downloads
+                $tempDir = Join-Path $env:TEMP "winget-install"
+                if (-not (Test-Path $tempDir)) {
+                    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+                }
+
+                # Download dependencies and winget
+                $downloads = @(
+                    @{
+                        Name = "VCLibs"
+                        Url = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
+                        File = "Microsoft.VCLibs.x64.14.00.Desktop.appx"
+                    },
+                    @{
+                        Name = "UI.Xaml"
+                        Url = "https://github.com/nicovs/NuGetPackageExplorer/releases/download/6.1.0.2/Microsoft.UI.Xaml.2.8.x64.appx"
+                        File = "Microsoft.UI.Xaml.2.8.x64.appx"
+                    },
+                    @{
+                        Name = "Winget"
+                        Url = "https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+                        File = "Microsoft.DesktopAppInstaller.msixbundle"
+                    }
+                )
+
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+                foreach ($download in $downloads) {
+                    $filePath = Join-Path $tempDir $download.File
+                    Write-Host "Downloading $($download.Name)..."
+                    try {
+                        Invoke-WebRequest -Uri $download.Url -OutFile $filePath -UseBasicParsing
+                    } catch {
+                        Write-Host "Failed to download $($download.Name): $_"
+                        throw "Failed to download winget dependencies"
+                    }
+                }
+
+                # Install VCLibs dependency
+                Write-Host "Installing VCLibs..."
+                Add-AppxPackage -Path (Join-Path $tempDir "Microsoft.VCLibs.x64.14.00.Desktop.appx") -ErrorAction SilentlyContinue
+
+                # Install UI.Xaml dependency
+                Write-Host "Installing UI.Xaml..."
+                Add-AppxPackage -Path (Join-Path $tempDir "Microsoft.UI.Xaml.2.8.x64.appx") -ErrorAction SilentlyContinue
+
+                # Install winget
+                Write-Host "Installing Winget..."
+                Add-AppxPackage -Path (Join-Path $tempDir "Microsoft.DesktopAppInstaller.msixbundle") -ErrorAction Stop
+
+                # Clean up
+                Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+
+                # Refresh PATH and verify
+                $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+                # Add winget to path if not already there
+                $wingetPath = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
+                if ($env:Path -notlike "*$wingetPath*") {
+                    $env:Path = "$env:Path;$wingetPath"
+                }
+
+                # Verify installation
+                $winget = Get-Command winget -ErrorAction SilentlyContinue
+                if (-not $winget) {
+                    throw "Winget installation failed. Please install manually from the Microsoft Store (App Installer)."
+                }
+
+                Write-Host "Winget installed successfully."
             }
         }
 
