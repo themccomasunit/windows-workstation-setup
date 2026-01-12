@@ -9,6 +9,7 @@ Automated PowerShell script for ephemeral Windows sandbox environments. Installs
 - **GitHub CLI (gh)** - Command-line interface for GitHub
 - **Visual Studio Code** - Code editor
 - **Claude Code Extension** - AI coding assistant for VS Code
+- **Python 3.13** - Python programming language with default options
 - **Google Chrome** - Web browser (set as system default)
 
 ## Quick Start
@@ -22,7 +23,7 @@ irm https://raw.githubusercontent.com/themccomasunit/windows-workstation-setup/m
 The script will:
 1. Download the setup files
 2. Install winget if not present
-3. Install PowerShell 7, Git, GitHub CLI, VS Code, and Google Chrome via winget
+3. Install PowerShell 7, Git, GitHub CLI, VS Code, Python 3.13, and Google Chrome via winget
 4. Configure Git with your identity
 5. Install Claude Code extension
 6. Set Google Chrome as the default browser
