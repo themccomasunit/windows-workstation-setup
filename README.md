@@ -11,6 +11,7 @@ Automated PowerShell script for ephemeral Windows sandbox environments. Installs
 - **Claude Code Extension** - AI coding assistant for VS Code
 - **Python 3.13** - Python programming language with default options
 - **Google Chrome** - Web browser (set as system default)
+- **Azure CLI** - Command-line interface for Azure
 
 ## Quick Start
 
@@ -23,7 +24,7 @@ irm https://raw.githubusercontent.com/themccomasunit/windows-workstation-setup/m
 The script will:
 1. Download the setup files
 2. Install winget if not present
-3. Install PowerShell 7, Git, GitHub CLI, VS Code, Python 3.13, and Google Chrome via winget
+3. Install PowerShell 7, Git, GitHub CLI, VS Code, Python 3.13, Google Chrome, and Azure CLI via winget
 4. Configure Git with your identity
 5. Install Claude Code extension
 6. Fix Python PATH priority to prevent Windows Store prompt
@@ -74,6 +75,11 @@ After the automated setup completes, you'll need to:
 2. **GitHub CLI** (if skipped during setup)
    ```powershell
    gh auth login
+   ```
+
+3. **Azure CLI** (to authenticate with Azure)
+   ```powershell
+   az login
    ```
 
 ## Troubleshooting

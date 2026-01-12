@@ -473,6 +473,26 @@ try {
 }
 
 # ============================================================
+# STEP 10: Install Azure CLI
+# ============================================================
+Write-Status "Checking for Azure CLI..."
+$az = Get-Command az -ErrorAction SilentlyContinue
+if (-not $az) {
+    Write-Status "Installing Azure CLI..."
+    winget install --id Microsoft.AzureCLI --source winget --accept-source-agreements --accept-package-agreements --silent
+    Refresh-EnvironmentPath
+    Write-Success "Azure CLI installed successfully."
+    Write-Host "  Use 'az login' to authenticate with Azure." -ForegroundColor Gray
+} else {
+    $azVersion = az version --query '\"azure-cli\"' -o tsv 2>$null
+    if ($azVersion) {
+        Write-Success "Azure CLI is already installed: $azVersion"
+    } else {
+        Write-Success "Azure CLI is already installed."
+    }
+}
+
+# ============================================================
 # VERIFICATION
 # ============================================================
 Write-Status "Verifying installations..."
@@ -558,6 +578,20 @@ if ((Test-Path $chromePath) -or (Test-Path $chromePathX86)) {
     Write-Success "Google Chrome: Installed"
 } else {
     Write-Warning "Google Chrome: Not installed"
+    $installFailed = $true
+}
+
+# Check Azure CLI
+$az = Get-Command az -ErrorAction SilentlyContinue
+if ($az) {
+    $azVersion = az version --query '\"azure-cli\"' -o tsv 2>$null
+    if ($azVersion) {
+        Write-Success "Azure CLI: $azVersion"
+    } else {
+        Write-Success "Azure CLI: Installed"
+    }
+} else {
+    Write-Warning "Azure CLI: Not found in PATH (restart terminal)"
     $installFailed = $true
 }
 
