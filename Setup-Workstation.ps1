@@ -328,33 +328,63 @@ if ($code) {
 # STEP 8: Install Python 3.13
 # ============================================================
 Write-Status "Checking for Python 3.13..."
-$python = Get-Command python -ErrorAction SilentlyContinue
 
-if (-not $python) {
+# Check if real Python is installed (not the Windows Store stub)
+$pythonInstalled = $false
+$pythonPaths = @(
+    "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
+    "$env:ProgramFiles\Python313\python.exe",
+    "${env:ProgramFiles(x86)}\Python313\python.exe"
+)
+
+foreach ($path in $pythonPaths) {
+    if (Test-Path $path) {
+        $pythonInstalled = $true
+        break
+    }
+}
+
+if (-not $pythonInstalled) {
     Write-Status "Installing Python 3.13..."
     winget install --id Python.Python.3.13 --source winget --accept-source-agreements --accept-package-agreements --silent
     Refresh-EnvironmentPath
 
     # Also add Python to path manually if needed
-    $pythonPaths = @(
+    $pythonPathDirs = @(
         "$env:LOCALAPPDATA\Programs\Python\Python313",
-        "$env:LOCALAPPDATA\Programs\Python\Python313\Scripts"
+        "$env:LOCALAPPDATA\Programs\Python\Python313\Scripts",
+        "$env:ProgramFiles\Python313",
+        "$env:ProgramFiles\Python313\Scripts"
     )
-    foreach ($path in $pythonPaths) {
+    foreach ($path in $pythonPathDirs) {
         if ((Test-Path $path) -and ($env:Path -notlike "*$path*")) {
             $env:Path = "$env:Path;$path"
         }
     }
 
-    $python = Get-Command python -ErrorAction SilentlyContinue
-    if ($python) {
-        Write-Success "Python 3.13 installed successfully."
-    } else {
+    # Verify installation by checking the actual executable
+    $pythonInstalled = $false
+    foreach ($path in $pythonPaths) {
+        if (Test-Path $path) {
+            $pythonInstalled = $true
+            $pythonVersion = & $path --version 2>&1
+            Write-Success "Python 3.13 installed successfully: $pythonVersion"
+            break
+        }
+    }
+
+    if (-not $pythonInstalled) {
         Write-Warning "Python 3.13 installation may require a terminal restart."
     }
 } else {
-    $pythonVersion = python --version 2>&1
-    Write-Success "Python is already installed: $pythonVersion"
+    # Find the installed Python and get version
+    foreach ($path in $pythonPaths) {
+        if (Test-Path $path) {
+            $pythonVersion = & $path --version 2>&1
+            Write-Success "Python is already installed: $pythonVersion"
+            break
+        }
+    }
 }
 
 # ============================================================
@@ -468,11 +498,21 @@ if ($code) {
 }
 
 # Check Python
-$python = Get-Command python -ErrorAction SilentlyContinue
-if ($python) {
-    $pythonVersion = python --version 2>&1
-    Write-Success "Python: $pythonVersion"
-} else {
+$pythonFound = $false
+$pythonCheckPaths = @(
+    "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
+    "$env:ProgramFiles\Python313\python.exe",
+    "${env:ProgramFiles(x86)}\Python313\python.exe"
+)
+foreach ($path in $pythonCheckPaths) {
+    if (Test-Path $path) {
+        $pythonVersion = & $path --version 2>&1
+        Write-Success "Python: $pythonVersion"
+        $pythonFound = $true
+        break
+    }
+}
+if (-not $pythonFound) {
     Write-Warning "Python: Not found in PATH (restart terminal)"
     $installFailed = $true
 }
@@ -513,25 +553,32 @@ Write-Host ""
 
 # GitHub CLI Authentication
 Write-Status "GitHub CLI Authentication"
-Write-Host "You need to authenticate with GitHub to use the CLI and push/pull repos."
-Write-Host ""
 
-$authChoice = Read-Host "Would you like to authenticate with GitHub now? (Y/n)"
-if ($authChoice -ne 'n' -and $authChoice -ne 'N') {
-    Write-Host ""
-    Write-Host "A browser window will open for authentication." -ForegroundColor Yellow
-    Write-Host "Follow the prompts to complete GitHub authentication." -ForegroundColor Yellow
-    Write-Host ""
-
-    try {
-        gh auth login --web --git-protocol https
-        Write-Success "GitHub authentication complete!"
-    } catch {
-        Write-Warning "GitHub authentication was not completed. You can run 'gh auth login' later."
-    }
+# Check if already authenticated
+$ghAuthStatus = gh auth status 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Success "GitHub CLI is already authenticated."
 } else {
+    Write-Host "You need to authenticate with GitHub to use the CLI and push/pull repos."
     Write-Host ""
-    Write-Host "You can authenticate later by running: gh auth login" -ForegroundColor Yellow
+
+    $authChoice = Read-Host "Would you like to authenticate with GitHub now? (Y/n)"
+    if ($authChoice -ne 'n' -and $authChoice -ne 'N') {
+        Write-Host ""
+        Write-Host "A browser window will open for authentication." -ForegroundColor Yellow
+        Write-Host "Follow the prompts to complete GitHub authentication." -ForegroundColor Yellow
+        Write-Host ""
+
+        try {
+            gh auth login --web --git-protocol https
+            Write-Success "GitHub authentication complete!"
+        } catch {
+            Write-Warning "GitHub authentication was not completed. You can run 'gh auth login' later."
+        }
+    } else {
+        Write-Host ""
+        Write-Host "You can authenticate later by running: gh auth login" -ForegroundColor Yellow
+    }
 }
 
 # Final summary
