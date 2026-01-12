@@ -26,9 +26,10 @@ The script will:
 3. Install PowerShell 7, Git, GitHub CLI, VS Code, Python 3.13, and Google Chrome via winget
 4. Configure Git with your identity
 5. Install Claude Code extension
-6. Set Google Chrome as the default browser
-7. Guide you through GitHub CLI authentication
-8. Automatically open VS Code and launch Claude Code authentication
+6. Fix Python PATH priority to prevent Windows Store prompt
+7. Set Google Chrome as the default browser
+8. Guide you through GitHub CLI authentication
+9. Automatically open VS Code and launch Claude Code authentication
 
 ## Requirements
 
@@ -93,6 +94,13 @@ Or install manually in VS Code:
 1. Open Extensions (Ctrl+Shift+X)
 2. Search for "Claude Code"
 3. Click Install
+
+### Python command opens Microsoft Store
+This should be automatically fixed by the setup script, which reorders your User PATH to prioritize the real Python installation over Windows Store aliases. If the issue persists:
+
+1. Open Windows Settings
+2. Search for "Manage app execution aliases"
+3. Disable both `python.exe` and `python3.exe`
 
 ### Installation fails
 Check the output for specific errors. Common issues:

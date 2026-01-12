@@ -388,6 +388,40 @@ if (-not $pythonInstalled) {
 }
 
 # ============================================================
+# STEP 8b: Fix Python PATH Priority (Windows Store Alias Issue)
+# ============================================================
+Write-Status "Configuring Python PATH priority..."
+try {
+    # Get current User PATH
+    $currentUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+
+    # Define Python paths that should be prioritized
+    $pythonPriorities = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python313\Scripts",
+        "$env:LOCALAPPDATA\Programs\Python\Python313",
+        "$env:LOCALAPPDATA\Programs\Python\Launcher"
+    )
+
+    # Remove Python paths from current PATH if they exist
+    $pathParts = $currentUserPath -split ';' | Where-Object {
+        $part = $_
+        -not ($pythonPriorities | Where-Object { $part -like "*$_*" })
+    }
+
+    # Build new PATH with Python paths first, followed by remaining paths
+    $newUserPath = ($pythonPriorities + $pathParts) -join ';'
+
+    # Set the updated User PATH
+    [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
+
+    Write-Success "Python PATH priority configured. Python paths now precede WindowsApps."
+    Write-Host "  This fixes the Microsoft Store prompt issue when running 'python' command." -ForegroundColor Gray
+} catch {
+    Write-Warning "Could not update PATH priority: $_"
+    Write-Host "  You may need to manually reorder Python paths in User PATH environment variable." -ForegroundColor Yellow
+}
+
+# ============================================================
 # STEP 9: Install Google Chrome and Set as Default Browser
 # ============================================================
 Write-Status "Checking for Google Chrome..."
