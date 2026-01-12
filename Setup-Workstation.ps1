@@ -51,6 +51,7 @@ Write-Host @"
 ║   - GitHub CLI (gh)                                           ║
 ║   - Visual Studio Code                                        ║
 ║   - Claude Code Extension                                     ║
+║   - Python 3.13 (with default options)                        ║
 ║   - Google Chrome (set as default browser)                    ║
 ╚═══════════════════════════════════════════════════════════════╝
 
@@ -324,7 +325,40 @@ if ($code) {
 }
 
 # ============================================================
-# STEP 8: Install Google Chrome and Set as Default Browser
+# STEP 8: Install Python 3.13
+# ============================================================
+Write-Status "Checking for Python 3.13..."
+$python = Get-Command python -ErrorAction SilentlyContinue
+
+if (-not $python) {
+    Write-Status "Installing Python 3.13..."
+    winget install --id Python.Python.3.13 --source winget --accept-source-agreements --accept-package-agreements --silent
+    Refresh-EnvironmentPath
+
+    # Also add Python to path manually if needed
+    $pythonPaths = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python313",
+        "$env:LOCALAPPDATA\Programs\Python\Python313\Scripts"
+    )
+    foreach ($path in $pythonPaths) {
+        if ((Test-Path $path) -and ($env:Path -notlike "*$path*")) {
+            $env:Path = "$env:Path;$path"
+        }
+    }
+
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        Write-Success "Python 3.13 installed successfully."
+    } else {
+        Write-Warning "Python 3.13 installation may require a terminal restart."
+    }
+} else {
+    $pythonVersion = python --version 2>&1
+    Write-Success "Python is already installed: $pythonVersion"
+}
+
+# ============================================================
+# STEP 9: Install Google Chrome and Set as Default Browser
 # ============================================================
 Write-Status "Checking for Google Chrome..."
 $chromePath = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
@@ -433,6 +467,16 @@ if ($code) {
     }
 }
 
+# Check Python
+$python = Get-Command python -ErrorAction SilentlyContinue
+if ($python) {
+    $pythonVersion = python --version 2>&1
+    Write-Success "Python: $pythonVersion"
+} else {
+    Write-Warning "Python: Not found in PATH (restart terminal)"
+    $installFailed = $true
+}
+
 # Check Google Chrome
 $chromePath = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
 $chromePathX86 = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
@@ -502,6 +546,7 @@ Write-Host "  - Git for Windows (configured with your identity)"
 Write-Host "  - GitHub CLI"
 Write-Host "  - Visual Studio Code"
 Write-Host "  - Claude Code Extension"
+Write-Host "  - Python 3.13"
 Write-Host "  - Google Chrome (default browser)"
 Write-Host ""
 Write-Host "Tip: You may need to restart your terminal or open a new one"
