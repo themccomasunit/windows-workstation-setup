@@ -50,7 +50,6 @@ Write-Host @"
 ║   - Git for Windows                                           ║
 ║   - GitHub CLI (gh)                                           ║
 ║   - Visual Studio Code                                        ║
-║   - Claude Code Extension                                     ║
 ║   - Python 3.13 (with default options)                        ║
 ║   - Google Chrome (set as default browser)                    ║
 ╚═══════════════════════════════════════════════════════════════╝
@@ -298,34 +297,7 @@ if (-not $code) {
 }
 
 # ============================================================
-# STEP 7: Install Claude Code Extension
-# ============================================================
-Write-Status "Checking for Claude Code extension..."
-Refresh-EnvironmentPath
-$code = Get-Command code -ErrorAction SilentlyContinue
-
-if ($code) {
-    $extensions = code --list-extensions 2>$null
-    if ($extensions -contains "anthropic.claude-code") {
-        Write-Success "Claude Code extension is already installed."
-    } else {
-        Write-Status "Installing Claude Code extension..."
-        code --install-extension anthropic.claude-code --force
-
-        # Verify
-        $extensions = code --list-extensions 2>$null
-        if ($extensions -contains "anthropic.claude-code") {
-            Write-Success "Claude Code extension installed successfully."
-        } else {
-            Write-Warning "Claude Code extension installation may have failed."
-        }
-    }
-} else {
-    Write-Warning "VS Code not available. Claude Code extension will need to be installed manually."
-}
-
-# ============================================================
-# STEP 8: Install Python 3.13
+# STEP 7: Install Python 3.13
 # ============================================================
 Write-Status "Checking for Python 3.13..."
 
@@ -462,11 +434,6 @@ try {
     # Open Default Apps settings for user to confirm Chrome as default
     # This is the most reliable cross-version approach
     Start-Process "ms-settings:defaultapps"
-    Write-Host ""
-    Write-Host "  Windows Default Apps settings has been opened." -ForegroundColor Yellow
-    Write-Host "  Please scroll down to 'Web browser' and select Google Chrome." -ForegroundColor Yellow
-    Write-Host "  Press Enter once you've set Chrome as the default browser..." -ForegroundColor Yellow
-    Read-Host
     Write-Success "Default browser configuration completed."
 } catch {
     Write-Warning "Could not automatically set default browser. Please set manually in Windows Settings."
@@ -538,17 +505,6 @@ if ($code) {
 } else {
     Write-Warning "VS Code: Not found in PATH (restart terminal)"
     $installFailed = $true
-}
-
-# Check Claude Code Extension
-if ($code) {
-    $extensions = code --list-extensions 2>$null
-    if ($extensions -contains "anthropic.claude-code") {
-        Write-Success "Claude Code Extension: Installed"
-    } else {
-        Write-Warning "Claude Code Extension: Not installed"
-        $installFailed = $true
-    }
 }
 
 # Check Python
